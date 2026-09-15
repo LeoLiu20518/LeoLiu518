@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>时光便签 Pro · 购买</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:#F9FAFC;font-family:"Microsoft YaHei UI",sans-serif;color:#1F2430;}
+  .card{background:#fff;border:1px solid #E3E6EE;border-radius:14px;padding:32px 36px;
+        width:340px;text-align:center;box-shadow:0 6px 24px rgba(30,40,90,.08);}
+  h1{font-size:20px;margin:0 0 6px;}
+  .sub{color:#7A8090;font-size:13px;margin-bottom:18px;}
+  #amount{font-size:26px;color:#3B62D9;}
+  #qr{margin:18px auto;display:flex;justify-content:center;}
+  .tip{color:#7A8090;font-size:12px;margin:8px 0;}
+  code#key{display:block;background:#F1F4FA;border:1px dashed #B9C2D8;border-radius:8px;
+        padding:10px;font-size:15px;letter-spacing:1px;margin:12px 0;word-break:break-all;}
+  button{background:#3B62D9;color:#fff;border:0;border-radius:8px;padding:9px 22px;
+        font-size:14px;cursor:pointer;}
+  button:hover{background:#2E4FBB;}
+  .err{color:#D9534F;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>时光便签 Pro</h1>
+  <div class="sub">买断授权 · 一码绑定 3 台</div>
+
+  <div id="step-pay">
+    <p>应付金额：<b id="amount">--</b></p>
+    <div id="qr"></div>
+    <p class="tip">用微信 / 支付宝扫码付款（无需登录）</p>
+    <p class="tip" id="polling">等待付款中…</p>
+  </div>
+
+  <div id="step-done" hidden>
+    <p>✅ 支付成功，你的激活码：</p>
+    <code id="key"></code>
+    <button id="copy">复制激活码</button>
+    <p class="tip">打开时光便签 → 设置 → 粘贴激活码 → 激活</p>
+  </div>
+
+  <div id="step-err" hidden><p class="err" id="errmsg"></p></div>
+</div>
+
+<script>
+// 服务端基址：可用 ?api= 覆盖（默认生产 FC）
+const BASE = (new URLSearchParams(location.search).get("api") ||
+              "https://time-note-idrrtrkcmu.cn-shanghai.fcapp.run").replace(/\/$/, "");
+
+async function post(path, body) {
+  const r = await fetch(BASE + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {})
+  });
+  return r.json();
+}
+function fail(msg) {
+  document.getElementById("step-pay").hidden = true;
+  document.getElementById("step-err").hidden = false;
+  document.getElementById("errmsg").textContent = msg;
+}
+
+(async () => {
+  let o;
+  try { o = await post("/create_order", {}); }
+  catch (e) { return fail("无法连接服务，请稍后重试"); }
+  if (!o.ok) return fail(o.err === "rate_limited"
+                         ? "下单过于频繁，请稍后刷新重试"
+                         : "创建订单失败：" + (o.err || "unknown"));
+
+  document.getElementById("amount").textContent = "¥" + (o.amount_cents / 100).toFixed(2);
+  new QRCode(document.getElementById("qr"),
+             { text: o.qr || o.pay_url, width: 220, height: 220 });
+
+  const timer = setInterval(async () => {
+    let s;
+    // query_token 由 create_order 下发，查单必须回传（防 order_id 被枚举取码）
+    try { s = await post("/order_status", { order_id: o.order_id,
+                                            query_token: o.query_token || "" }); }
+    catch (e) { return; }
+    if (!s.ok) {
+      const tip = document.getElementById("polling");
+      if (s.err === "rate_limited") { tip.textContent = "查询过于频繁，稍候自动重试…"; return; }
+      clearInterval(timer);
+      return fail("查单失败：" + (s.err || "unknown") + "，请刷新页面重试");
+    }
+    if (s.paid) {
+      clearInterval(timer);
+      document.getElementById("step-pay").hidden = true;
+      document.getElementById("step-done").hidden = false;
+      document.getElementById("key").textContent = s.license_key;
+    }
+  }, 3000);
+  setTimeout(() => { clearInterval(timer);
+    document.getElementById("polling").textContent = "订单超时，请刷新页面重试"; }, 3600000);
+})();
+
+document.getElementById("copy").onclick = () =>
+  navigator.clipboard.writeText(document.getElementById("key").textContent);
+</script>
+</body>
+</html>
