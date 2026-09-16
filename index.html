@@ -147,10 +147,20 @@
     .quad,.cell,.note,.demo{min-width:0;}
     .note{word-break:break-word;}
   }
+  .dl-box{display:grid;grid-template-columns:1.2fr 1fr;gap:22px;background:var(--card);
+    border:1px solid var(--line);border-radius:16px;padding:26px 28px;box-shadow:var(--shadow);}
+  .dl-main h3{margin:0 0 8px;font-size:18px;}
+  .dl-main p{margin:0 0 16px;color:var(--sub);font-size:14px;}
+  .pwd{display:inline-block;background:#FFF3D6;color:#8A6100;border-radius:6px;
+    padding:0 8px;font-family:Consolas,monospace;letter-spacing:2px;}
+  .dl-tips{margin:0;padding:0;list-style:none;color:var(--sub);font-size:13.5px;
+    display:flex;flex-direction:column;gap:8px;justify-content:center;}
+  .dl-tips li::before{content:"✓";color:#30A46C;margin-right:8px;}
   @media (max-width:560px){
     .grid3{grid-template-columns:1fr;}
     section{padding:46px 0;}
     .hero h1{font-size:26px;}
+    .dl-box{grid-template-columns:1fr;}
   }
 </style>
 </head>
@@ -164,6 +174,7 @@
       <a href="#features">功能</a>
       <a href="#privacy-sec">隐私</a>
       <a href="#buy">价格</a>
+      <a href="#download">下载</a>
       <a href="#contact">联系客服</a>
     </nav>
     <a class="btn sm" href="#buy">购买 Pro</a>
@@ -180,6 +191,7 @@
         重要的事先做，走过的路能回看。无需登录、离线可用，你的记录只属于你。</p>
       <div class="cta">
         <a class="btn" href="#buy">立即购买 · ¥39.9 买断</a>
+        <a class="btn ghost" href="#download">免费下载体验</a>
         <a class="btn ghost" href="#features">了解功能</a>
       </div>
       <div class="mini">
@@ -269,9 +281,9 @@
         <ul>
           <li>四象限、时光轴、便签墙基础功能</li>
           <li>本地存储 · 离线可用</li>
-          <li>满足日常轻量记录</li>
+          <li>免费版额度：待办 <b>10</b> 条 / 便签 <b>5</b> 条</li>
         </ul>
-        <a class="btn ghost" href="#contact">获取安装包</a>
+        <a class="btn ghost" href="#download">免费下载</a>
       </div>
       <div class="plan pro">
         <span class="badge">推荐</span>
@@ -279,6 +291,7 @@
         <div class="amt">¥39.9<small> / 一次买断</small></div>
         <ul>
           <li>解锁全部 Pro 功能与后续更新</li>
+          <li>待办与便签<b>数量不限</b></li>
           <li>一个激活码绑定 <b>3 台</b>设备</li>
           <li>扫码即付，付款后<b>自动发放激活码</b></li>
           <li>支持换机解绑，长期有效</li>
@@ -287,6 +300,27 @@
       </div>
     </div>
     <p class="note-buy">购买即在微信 / 支付宝扫码付款，付款成功后页面会自动显示你的激活码。</p>
+  </div>
+</section>
+
+<!-- ===== 下载 ===== -->
+<section id="download" style="padding-top:0;">
+  <div class="wrap">
+    <h2 class="sec">下载体验</h2>
+    <p class="sec-sub">免费版可长期使用（待办 ≤10 条 / 便签 ≤5 条），下载后解压即用、无需安装。</p>
+    <div class="dl-box">
+      <div class="dl-main">
+        <h3>📦 时光便签 Windows 便携版</h3>
+        <p>百度网盘分享 · 提取码 <b class="pwd">1hj8</b>（打开链接通常自动填入提取码）</p>
+        <a class="btn" target="_blank" rel="noopener"
+           href="https://pan.baidu.com/s/1sYHNdSLfYP0XU9WbxxCfcA?pwd=1hj8">百度网盘下载</a>
+      </div>
+      <ul class="dl-tips">
+        <li>适用于 Windows 10 / 11 64 位</li>
+        <li>解压后双击目录内程序即可运行，免安装、免注册</li>
+        <li>数据只存本地磁盘；购买后在软件内输入激活码升级 Pro</li>
+      </ul>
+    </div>
   </div>
 </section>
 
