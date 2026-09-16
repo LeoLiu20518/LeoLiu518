@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>时光便签 Pro · 购买</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
        background:#F9FAFC;font-family:"Microsoft YaHei UI",sans-serif;color:#1F2430;}
@@ -21,6 +20,7 @@
         font-size:14px;cursor:pointer;}
   button:hover{background:#2E4FBB;}
   .err{color:#D9534F;font-size:13px;}
+  .notice{color:#7A8090;font-size:13px;}
 </style>
 </head>
 <body>
@@ -31,7 +31,7 @@
   <div id="step-pay">
     <p>应付金额：<b id="amount">--</b></p>
     <div id="qr"></div>
-    <p class="tip">用微信 / 支付宝扫码付款（无需登录）</p>
+    <p class="tip" id="qr-tip">用微信 / 支付宝扫码付款（无需登录）</p>
     <p class="tip" id="polling">等待付款中…</p>
   </div>
 
@@ -46,6 +46,39 @@
 </div>
 
 <script>
+// 二维码库多镜像加载：cdnjs 在境内偶发不可达，加载失败自动换镜像；
+// 全部失败则降级为「付款链接可点可复制」，绝不让买家卡在空白二维码上。
+const QR_CDNS = [
+  "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",
+  "https://cdn.staticfile.net/qrcodejs/1.0.0/qrcode.min.js",
+  "https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"
+];
+function loadQR(i) {
+  return new Promise(resolve => {
+    if (typeof QRCode !== "undefined" || i >= QR_CDNS.length)
+      return resolve(typeof QRCode !== "undefined");
+    const s = document.createElement("script");
+    s.src = QR_CDNS[i];
+    s.onload = () => resolve(typeof QRCode !== "undefined");
+    s.onerror = () => loadQR(i + 1).then(resolve);
+    document.head.appendChild(s);
+  });
+}
+function renderPay(text) {
+  const box = document.getElementById("qr");
+  if (typeof QRCode !== "undefined") {
+    new QRCode(box, { text: text, width: 220, height: 220 });
+    return;
+  }
+  box.textContent = "";
+  const a = document.createElement("a");
+  a.href = text; a.target = "_blank"; a.textContent = text;
+  a.style.cssText = "font-size:12px;word-break:break-all;color:#3B62D9;";
+  box.appendChild(a);
+  document.getElementById("qr-tip").textContent =
+    "二维码组件加载失败：点上方链接付款，或复制链接到微信/支付宝打开";
+}
+
 // 服务端基址：可用 ?api= 覆盖（默认生产 FC）
 const BASE = (new URLSearchParams(location.search).get("api") ||
               "https://time-note-idrrtrkcmu.cn-shanghai.fcapp.run").replace(/\/$/, "");
@@ -58,10 +91,12 @@ async function post(path, body) {
   });
   return r.json();
 }
-function fail(msg) {
+function fail(msg, kind) {
   document.getElementById("step-pay").hidden = true;
   document.getElementById("step-err").hidden = false;
-  document.getElementById("errmsg").textContent = msg;
+  const el = document.getElementById("errmsg");
+  el.textContent = msg;
+  el.className = kind === "notice" ? "notice" : "err";
 }
 
 (async () => {
@@ -70,11 +105,19 @@ function fail(msg) {
   catch (e) { return fail("无法连接服务，请稍后重试"); }
   if (!o.ok) return fail(o.err === "rate_limited"
                          ? "下单过于频繁，请稍后刷新重试"
-                         : "创建订单失败：" + (o.err || "unknown"));
+                         : o.err === "pay_not_configured"
+                         ? "支付通道开通中，请稍后再试"
+                         : o.err === "pay_unavailable"
+                         ? "支付网关暂不可用，请稍后刷新重试"
+                         : o.err === "tail_exhausted"
+                         ? "当前下单人数较多，请稍后刷新重试"
+                         : "创建订单失败：" + (o.err || "unknown"),
+                         (o.err === "pay_not_configured" || o.err === "pay_unavailable"
+                          || o.err === "tail_exhausted") ? "notice" : undefined);
 
   document.getElementById("amount").textContent = "¥" + (o.amount_cents / 100).toFixed(2);
-  new QRCode(document.getElementById("qr"),
-             { text: o.qr || o.pay_url, width: 220, height: 220 });
+  await loadQR(0);
+  renderPay(o.qr || o.pay_url);
 
   const timer = setInterval(async () => {
     let s;
@@ -85,8 +128,13 @@ function fail(msg) {
     if (!s.ok) {
       const tip = document.getElementById("polling");
       if (s.err === "rate_limited") { tip.textContent = "查询过于频繁，稍候自动重试…"; return; }
-      clearInterval(timer);
-      return fail("查单失败：" + (s.err || "unknown") + "，请刷新页面重试");
+      // 终态错误（订单不存在/凭证不符）才停；server_error 等瞬态错误继续轮询
+      if (s.err === "bad_token" || s.err === "unknown_order") {
+        clearInterval(timer);
+        return fail("查单失败：" + (s.err || "unknown") + "，请刷新页面重试");
+      }
+      tip.textContent = "查询暂时失败，自动重试中…";
+      return;
     }
     if (s.paid) {
       clearInterval(timer);
@@ -99,8 +147,23 @@ function fail(msg) {
     document.getElementById("polling").textContent = "订单超时，请刷新页面重试"; }, 3600000);
 })();
 
-document.getElementById("copy").onclick = () =>
-  navigator.clipboard.writeText(document.getElementById("key").textContent);
+document.getElementById("copy").onclick = async () => {
+  const text = document.getElementById("key").textContent;
+  const btn = document.getElementById("copy");
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "已复制 ✓";
+  } catch (e) {
+    // 非 HTTPS / 权限被拒：退化为选中文本，让买家手动 Ctrl+C
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById("key"));
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    btn.textContent = "已选中，请按 Ctrl+C";
+  }
+  setTimeout(() => { btn.textContent = "复制激活码"; }, 2000);
+};
 </script>
 </body>
 </html>
