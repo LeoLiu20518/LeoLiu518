@@ -31,7 +31,7 @@
   <div id="step-pay">
     <p>应付金额：<b id="amount">--</b></p>
     <div id="qr"></div>
-    <p class="tip" id="qr-tip">用微信 / 支付宝扫码付款（无需登录）</p>
+    <p class="tip" id="qr-tip">请用支付宝扫码付款（无需登录）</p>
     <p class="tip" id="polling">等待付款中…</p>
   </div>
 
@@ -76,7 +76,7 @@ function renderPay(text) {
   a.style.cssText = "font-size:12px;word-break:break-all;color:#3B62D9;";
   box.appendChild(a);
   document.getElementById("qr-tip").textContent =
-    "二维码组件加载失败：点上方链接付款，或复制链接到微信/支付宝打开";
+    "二维码组件加载失败：点上方链接付款，或复制链接到支付宝打开";
 }
 
 // 服务端基址：可用 ?api= 覆盖（默认生产 FC）
@@ -117,7 +117,9 @@ function fail(msg, kind) {
 
   document.getElementById("amount").textContent = "¥" + (o.amount_cents / 100).toFixed(2);
   await loadQR(0);
-  renderPay(o.qr || o.pay_url);
+  // 二维码文本必须是收银台链接（pay_url）：支付宝扫它直达付款；
+  // qr 字段是虎皮椒「二维码图片链接」，当文本套码会造成扫出第二个码。
+  renderPay(o.pay_url || o.qr);
 
   const timer = setInterval(async () => {
     let s;
