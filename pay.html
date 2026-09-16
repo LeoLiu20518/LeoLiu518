@@ -99,21 +99,53 @@ function fail(msg, kind) {
   el.className = kind === "notice" ? "notice" : "err";
 }
 
-(async () => {
+function showKey(k) {
+  document.getElementById("step-pay").hidden = true;
+  document.getElementById("step-done").hidden = false;
+  document.getElementById("key").textContent = k;
+}
+
+// 会话内刷新复用同一订单：金额与二维码不变，避免每次刷新新建订单堆垃圾单
+async function reuseOrCreate() {
+  const raw = sessionStorage.getItem("tn_order");
+  if (raw) {
+    try {
+      const s = JSON.parse(raw);
+      if (Date.now() - s.ts < 30 * 60 * 1000) {
+        const st = await post("/order_status",
+                              { order_id: s.order_id, query_token: s.query_token });
+        if (st.ok && st.paid) { showKey(st.license_key); return null; }
+        if (st.ok) return s;                       // 未付 → 复用同单同金额同码
+      }
+    } catch (e) { /* 解析/查询失败 → 重建 */ }
+    sessionStorage.removeItem("tn_order");
+  }
   let o;
   try { o = await post("/create_order", {}); }
-  catch (e) { return fail("无法连接服务，请稍后重试"); }
-  if (!o.ok) return fail(o.err === "rate_limited"
-                         ? "下单过于频繁，请稍后刷新重试"
-                         : o.err === "pay_not_configured"
-                         ? "支付通道开通中，请稍后再试"
-                         : o.err === "pay_unavailable"
-                         ? "支付网关暂不可用，请稍后刷新重试"
-                         : o.err === "tail_exhausted"
-                         ? "当前下单人数较多，请稍后刷新重试"
-                         : "创建订单失败：" + (o.err || "unknown"),
-                         (o.err === "pay_not_configured" || o.err === "pay_unavailable"
-                          || o.err === "tail_exhausted") ? "notice" : undefined);
+  catch (e) { fail("无法连接服务，请稍后重试"); return null; }
+  if (!o.ok) {
+    fail(o.err === "rate_limited"
+         ? "下单过于频繁，请稍后刷新重试"
+         : o.err === "pay_not_configured"
+         ? "支付通道开通中，请稍后再试"
+         : o.err === "pay_unavailable"
+         ? "支付网关暂不可用，请稍后刷新重试"
+         : o.err === "tail_exhausted"
+         ? "当前下单人数较多，请稍后刷新重试"
+         : "创建订单失败：" + (o.err || "unknown"),
+         (o.err === "pay_not_configured" || o.err === "pay_unavailable"
+          || o.err === "tail_exhausted") ? "notice" : undefined);
+    return null;
+  }
+  sessionStorage.setItem("tn_order", JSON.stringify(
+    { ts: Date.now(), order_id: o.order_id, query_token: o.query_token,
+      amount_cents: o.amount_cents, pay_url: o.pay_url, qr: o.qr }));
+  return o;
+}
+
+(async () => {
+  const o = await reuseOrCreate();
+  if (!o) return;   // 已 fail 或已显示激活码
 
   document.getElementById("amount").textContent = "¥" + (o.amount_cents / 100).toFixed(2);
   await loadQR(0);
@@ -140,9 +172,8 @@ function fail(msg, kind) {
     }
     if (s.paid) {
       clearInterval(timer);
-      document.getElementById("step-pay").hidden = true;
-      document.getElementById("step-done").hidden = false;
-      document.getElementById("key").textContent = s.license_key;
+      sessionStorage.removeItem("tn_order");
+      showKey(s.license_key);
     }
   }, 3000);
   setTimeout(() => { clearInterval(timer);
